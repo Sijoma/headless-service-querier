@@ -1,0 +1,25 @@
+# This is a pod that queries all 3 endpoints
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: querier
+  labels:
+    app: querier
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: querier
+  template:
+    metadata:
+      name: querier
+      labels:
+        app: querier
+    spec:
+      containers:
+        - name: server
+          image: headless
+          args:
+            - --hostname=server # This is the name of the k8s service and it uses the namespaced service in this case (more about k8s dns -> https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
+          imagePullPolicy: Never
+      restartPolicy: Always

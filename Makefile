@@ -1,4 +1,3 @@
-
 docker-build:
 	docker build -t headless .
 

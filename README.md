@@ -8,3 +8,15 @@ The queriers job is then to lookup all IPs of the backing pods and gather the wo
 - `pinger` contains the code that lookups the IPs and pings the endpoints
 - `server` contains the code that exposes a endpoint to return worker information (name of worker & random worker count)
 - `deploy` contains the k8s manifests to deploy these components
+
+## Getting started
+
+- You need docker, kind & kubectl installed 
+
+To run it: 
+
+`make run` & then use kubectl to explore the default namespace.
+
+To tear it down: 
+
+`make teardown` - this removes the kind cluster. 

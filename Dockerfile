@@ -11,6 +11,8 @@ RUN go mod download
 
 # Copy the rest of the application source code
 COPY main.go main.go
+COPY pinger pinger
+COPY server server
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o headless

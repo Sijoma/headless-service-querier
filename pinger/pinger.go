@@ -53,7 +53,7 @@ func New(hostName, port string) error {
 		}
 		log.Printf("found %d ips, %v", len(ips), ips)
 		for _, ip := range ips {
-			fmt.Printf("%v ips found. Will call Fireman to do: %v \n", len(ips), ip.String())
+			fmt.Printf("Calling: %v \n", ip.String())
 			time.Sleep(2 * time.Second)
 			err := pingerInstance.do(ip.String(), port)
 			if err != nil {

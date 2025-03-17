@@ -13,6 +13,7 @@ RUN go mod download
 COPY main.go main.go
 COPY pinger pinger
 COPY server server
+COPY worker worker
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o headless

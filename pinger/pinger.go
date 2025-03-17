@@ -1,65 +1,104 @@
 package pinger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"time"
+
+	"headless/worker"
 )
 
-type pinger struct {
-	http.Client
+type Pinger struct {
+	responder      string
+	hostName, port string
+	client         http.Client
 }
 
-func newPinger() *pinger {
-	return &pinger{
-		http.Client{
-			Timeout: time.Second * 5,
-		},
+func New(responder, hostName string, port string) *Pinger {
+	return &Pinger{
+		responder: responder,
+		hostName:  hostName,
+		port:      port,
+		client:    http.Client{Timeout: time.Second * 5},
 	}
 }
 
-func (f *pinger) do(host string, port string) error {
-	resp, err := f.Get(fmt.Sprintf("http://%v:"+port, host))
+func (f *Pinger) do(hostName string) (*BackendResponse, error) {
+	resp, err := f.client.Get(fmt.Sprintf("http://%v:%v", hostName, f.port))
 	if err != nil {
-		return fmt.Errorf("do: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	raw, err := io.ReadAll(resp.Body)
+	var response worker.CountResponse
+	all, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("error while reading response: %v\n", err)
+		return nil, err
 	}
-	if raw != nil {
-		fmt.Printf("Output from ip: %v, %v \n\n", host, string(raw))
+	err = json.Unmarshal(all, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-	return nil
+
+	return &BackendResponse{
+		Name: response.WorkerName,
+		Info: fmt.Sprintf("%v workers", response.WorkersCount),
+	}, nil
 }
 
-func New(hostName, port string) error {
-	if hostName == "" {
-		return fmt.Errorf("hostname is empty")
+func (f *Pinger) Ping() ([]*BackendResponse, error) {
+	log.Printf("connecting to %s", f.hostName)
+	ips, err := net.LookupIP(f.hostName)
+	if err != nil {
+		return nil, fmt.Errorf("error while looking up ips from headless service: %w", err)
 	}
-	pingerInstance := newPinger()
-	for {
-		log.Printf("connecting to %s", hostName)
-		time.Sleep(time.Second * 2)
-		ips, err := net.LookupIP(hostName)
-		if err != nil {
-			fmt.Printf("error while looking up ips from headless service: %v\n", err)
-			continue
-		}
-		log.Printf("found %d ips, %v", len(ips), ips)
-		for _, ip := range ips {
-			fmt.Printf("Calling: %v \n", ip.String())
-			time.Sleep(2 * time.Second)
-			err := pingerInstance.do(ip.String(), port)
-			if err != nil {
-				fmt.Printf("error while pinging endpoint %v: %v\n", ip.String(), err)
-			}
-		}
-	}
+	log.Printf("found %d ips, %v", len(ips), ips)
+	var result []*BackendResponse
+	for _, ip := range ips {
+		fmt.Printf("Calling: %v \n", ip.String())
 
+		resp, err := f.do(ip.String())
+		if err != nil {
+			return nil, fmt.Errorf("error while pinging %v: %w", ip, err)
+		}
+		result = append(result, resp)
+	}
+	return result, nil
+}
+
+func (f *Pinger) Handler(w http.ResponseWriter, _ *http.Request) {
+	resp, err := f.Ping()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	body, err := json.Marshal(response{
+		Responder:   f.responder,
+		BackendInfo: resp,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(body)
+	if err != nil {
+		return
+	}
+	return
+}
+
+type response struct {
+	Responder   string             `json:"responder"`
+	BackendInfo []*BackendResponse `json:"backend_info"`
+}
+
+type BackendResponse struct {
+	Name string `json:"pod_name"`
+	Info string `json:"info"`
 }
